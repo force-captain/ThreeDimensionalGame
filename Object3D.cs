@@ -22,7 +22,12 @@ namespace ThreeDimensionalGame
             effect = new BasicEffect(gDevice);
         }
 
-
+        internal void Update(GameTime gameTime)
+        {
+            float deltaTime = (float)gameTime.ElapsedGameTime.TotalSeconds;
+            position += velocity * deltaTime;
+            velocity += acceleration * deltaTime;
+        }
     }
 
     internal abstract class TexturedObject : Object3D

@@ -1,6 +1,7 @@
 ﻿using Microsoft.Xna.Framework;
 using Microsoft.Xna.Framework.Graphics;
 using Microsoft.Xna.Framework.Input;
+using System;
 using System.Collections.Generic;
 using System.Reflection;
 
@@ -122,16 +123,16 @@ namespace ThreeDimensionalGame
             pixelRectangle = new Texture2D(GraphicsDevice, 1, 1);
             pixelRectangle.SetData(new[] { Color.White });
 
+            Random rnd = new Random();
+
             for(int i = -10; i <= 10; i++)
             { 
                 for(int j = -10; j <= 10; j++)
                 {
-                    Vector3 baseVector = new Vector3(i, 0, j);
-                    TexturedRectangle tileRect = new TexturedRectangle(GraphicsDevice, grassTexture,
-                        baseVector,
-                        baseVector + Vector3.UnitX,
-                        baseVector + Vector3.UnitZ,
-                        baseVector + Vector3.UnitX + Vector3.UnitZ);
+                    TexturedRectangle tileRect = new TexturedRectangle(GraphicsDevice, grassTexture, Vector3.Zero, Vector3.UnitX, Vector3.UnitZ, Vector3.UnitX + Vector3.UnitZ);
+                    tileRect.position = new Vector3(i, 0, j);
+                    tileRect.velocity = Vector3.Zero;
+                    tileRect.acceleration = new Vector3(rnd.NextSingle(), rnd.NextSingle(), rnd.NextSingle());
                     objects.Add(tileRect);
                 }
             }
@@ -246,6 +247,25 @@ namespace ThreeDimensionalGame
             cameraTarget = Player.Forward(1) + Player.position;
             cameraPosition = Player.position + Player.Forward(cameraZoomOffset);
 
+            foreach(Object3D obj in objects)
+            {
+                obj.Update(gameTime);
+            }
+
+            if (Input.mState.LeftButton == ButtonState.Pressed && Input.lastMState.LeftButton == ButtonState.Released)
+            {
+                Random rnd = new Random();
+
+                foreach(Object3D obj in objects)
+                {
+                    obj.position = new Vector3((rnd.Next() % 30) - 10, 0, (rnd.Next() % 30) - 10);
+                    obj.velocity = Vector3.UnitY * -1;
+                    obj.acceleration = new Vector3(rnd.NextSingle(), rnd.NextSingle(), rnd.NextSingle());
+                }
+            }
+
+
+
             // Get new matrix
             viewMatrix = Matrix.CreateLookAt(cameraPosition, cameraTarget, Vector3.Up);
 
@@ -295,7 +315,7 @@ namespace ThreeDimensionalGame
             {
                 if (obj.GetType() == typeof(TexturedRectangle))
                 {
-                    (obj as TexturedObject).Draw(Matrix.CreateTranslation(Vector3.Zero), viewMatrix, projectionMatrix);
+                    (obj as TexturedObject).Draw(Matrix.CreateTranslation(obj.position), viewMatrix, projectionMatrix);
                 }
             }
 
