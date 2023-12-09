@@ -2,6 +2,7 @@
 using Microsoft.Xna.Framework.Graphics;
 using Microsoft.Xna.Framework.Input;
 using System;
+using System.CodeDom;
 using System.Collections.Generic;
 using System.Reflection;
 
@@ -16,6 +17,9 @@ namespace ThreeDimensionalGame
         internal static Texture2D cursorTexture;
         internal static Texture2D grassTexture;
         internal static SpriteFont font;
+
+        internal static Model beachBallModel;
+        internal static Model bulletModel;
 
         // Used for camera zoom (i.e. sprinting)
         internal static float cameraZoomOffset;
@@ -36,7 +40,7 @@ namespace ThreeDimensionalGame
         Matrix worldMatrix;
 
         BasicEffect effect;
-        List<Object3D> objects;
+        List<GameObject> objects;
 
         // Axis
         VertexBuffer xBuffer;
@@ -61,11 +65,13 @@ namespace ThreeDimensionalGame
             isMouseRepositioned = false;
             cameraZoomOffset = 0f;
 
-            objects = new List<Object3D>();
+            objects = new List<GameObject>();
 
             // Player init
-            Player.rotationX = 0f;
-            Player.rotationY = 0f;
+            Player.roll = 0f;
+            Player.yaw = 0f;
+            Player.pitch = 0f;
+
             Player.isMidAir = false;
             Player.position = Vector3.UnitY;
             Player.velocity = Vector3.Zero;
@@ -83,7 +89,7 @@ namespace ThreeDimensionalGame
                 GraphicsAdapter.DefaultAdapter.CurrentDisplayMode.Height);
 
             // Matrices
-            projectionMatrix = Matrix.CreatePerspectiveFieldOfView(MathHelper.ToRadians(45f), GraphicsDevice.DisplayMode.AspectRatio, 1f, 1000f);
+            projectionMatrix = Matrix.CreatePerspectiveFieldOfView(MathHelper.ToRadians(45f), GraphicsDevice.DisplayMode.AspectRatio, 0.1f, 1000f);
             viewMatrix = Matrix.CreateLookAt(cameraPosition, cameraTarget, new Vector3(0f, 1f, 0f));
             worldMatrix = Matrix.CreateWorld(cameraTarget, Vector3.Forward, Vector3.Up);
 
@@ -123,7 +129,10 @@ namespace ThreeDimensionalGame
             pixelRectangle = new Texture2D(GraphicsDevice, 1, 1);
             pixelRectangle.SetData(new[] { Color.White });
 
-            Random rnd = new Random();
+
+            // Models
+            beachBallModel = Content.Load<Model>("BeachBall\\BeachBall");
+            bulletModel = Content.Load<Model>("bullet\\bullet");
 
             for(int i = -10; i <= 10; i++)
             { 
@@ -132,7 +141,7 @@ namespace ThreeDimensionalGame
                     TexturedRectangle tileRect = new TexturedRectangle(GraphicsDevice, grassTexture, Vector3.Zero, Vector3.UnitX, Vector3.UnitZ, Vector3.UnitX + Vector3.UnitZ);
                     tileRect.position = new Vector3(i, 0, j);
                     tileRect.velocity = Vector3.Zero;
-                    tileRect.acceleration = new Vector3(rnd.NextSingle(), rnd.NextSingle(), rnd.NextSingle());
+                    tileRect.acceleration = Vector3.Zero;
                     objects.Add(tileRect);
                 }
             }
@@ -163,32 +172,37 @@ namespace ThreeDimensionalGame
             // Forward
             if (Input.kState.IsKeyDown(Keybinds.forwardKey))
             {
-                Player.position += Player.Forward(deltaTime);
+                Player.position += Player.Forward(deltaTime * Player.moveSpeedMultiplier);
             }
             // Back
-            if (Input.kState.IsKeyDown(Keybinds.backKey)) 
+            if (Input.kState.IsKeyDown(Keybinds.backKey))
             {
-                Player.position += Player.Forward(deltaTime * -1);
+                Player.position += Player.Forward(deltaTime * -Player.moveSpeedMultiplier);
             }
             // Move left
-            if (Input.kState.IsKeyDown(Keybinds.leftKey)) 
+            if (Input.kState.IsKeyDown(Keybinds.leftKey))
             {
                 Player.position += Player.Right(deltaTime * -1);
             }
             // Move right
-            if (Input.kState.IsKeyDown(Keybinds.rightKey)) 
+            if (Input.kState.IsKeyDown(Keybinds.rightKey))
             {
                 Player.position += Player.Right(deltaTime);
             }
             // Turn left
-            if (Input.kState.IsKeyDown(Keybinds.turnLeftKey)) 
+            if (Input.kState.IsKeyDown(Keybinds.turnLeftKey))
             {
-                Player.rotationY -= deltaTime * 90;
+                Player.yaw += deltaTime * 90;
             }
             // Turn right
-            if (Input.kState.IsKeyDown(Keybinds.turnRightKey)) 
+            if (Input.kState.IsKeyDown(Keybinds.turnRightKey))
             {
-                Player.rotationY += deltaTime * 90;
+                Player.yaw -= deltaTime * 90;
+            }
+
+            if (Input.kState.IsKeyDown(Keys.Up))
+            {
+                Player.roll += deltaTime * 90;
             }
 
             // Jump
@@ -211,13 +225,13 @@ namespace ThreeDimensionalGame
             }
 
             // Sprint (hold/release)
-            if (Input.kState.IsKeyDown(Keybinds.sprintKey)) 
+            if (Input.kState.IsKeyDown(Keybinds.sprintKey))
             {
                 if (cameraZoomOffset > -0.15f)
                 {
                     cameraZoomOffset -= 0.03f;
                 }
-                Player.moveSpeedMultiplier = 1.5f;
+                Player.moveSpeedMultiplier = 3f;
             }
             else
             {
@@ -228,40 +242,69 @@ namespace ThreeDimensionalGame
                 Player.moveSpeedMultiplier = 1f;
             }
 
-            // Update mouse
-            Point change = Input.mState.Position - Input.lastMState.Position;
-            if (!isMouseRepositioned)
+            // Check clicking
+            if (Input.mState.LeftButton == ButtonState.Pressed && Input.lastMState.LeftButton == ButtonState.Released)
             {
-                Player.rotationY += change.X / -20f;
+                Line line = new Line(GraphicsDevice, Player.position, Player.position + Player.UserFacing(1), Color.Red);
+                line.velocity = Player.UserFacing(3);
+                objects.Add(line);
             }
 
-            // Check if mouse is out of bounds.
-            isMouseRepositioned = false;
-            if (Input.mState.X == 0 || Input.mState.X > screenBounds.X - 10)
+            if (Input.mState.RightButton == ButtonState.Pressed && Input.lastMState.RightButton == ButtonState.Released)
             {
-                Mouse.SetPosition(screenBounds.X / 2, Input.mState.Y);
-                isMouseRepositioned = true;
+                ModelObject ball = new ModelObject(bulletModel);
+                ball.position = Player.UserFacing(0.5f) + Player.position;
+                ball.velocity = Player.UserFacing(10f);
+                ball.acceleration = Vector3.UnitY * -9.81f;
+                ball.scaleFactor = 4f;
+                ball.rotation = new Vector3(Player.yaw, Player.pitch, Player.roll);
+                ball.originVector = Player.UserFacing(1f);
+                objects.Add(ball);
             }
+
+            // Update mouse
+            if (IsActive)
+            { 
+                Point change = Input.mState.Position - Input.lastMState.Position;
+                if (!isMouseRepositioned)
+                {
+                    Player.yaw += change.X / -20f;
+                    Player.roll += change.Y / -20f;
+                }
+
+                // Check if mouse is out of bounds.
+                isMouseRepositioned = false;
+                if (Input.mState.X == 0 || Input.mState.X > screenBounds.X - 10
+                || Input.mState.Y == 0 || Input.mState.Y > screenBounds.Y - 10)
+                {
+                    Mouse.SetPosition(screenBounds.X / 2, screenBounds.Y / 2);
+                    isMouseRepositioned = true;
+                }
+            }
+
 
             // Get new camera position and target
-            cameraTarget = Player.Forward(1) + Player.position;
-            cameraPosition = Player.position + Player.Forward(cameraZoomOffset);
+            cameraTarget = Player.UserFacing(1) + Player.position;
+            cameraPosition = Player.position + Player.UserFacing(cameraZoomOffset);
 
-            foreach(Object3D obj in objects)
+            foreach(GameObject obj in objects)
             {
+                if (obj.GetType() == typeof(ModelObject))
+                {
+                    (obj as ModelObject).Update(gameTime);
+                }
+                else
                 obj.Update(gameTime);
             }
 
-            if (Input.mState.LeftButton == ButtonState.Pressed && Input.lastMState.LeftButton == ButtonState.Released)
+            // Update rotation
+            if (Player.roll > 70)
             {
-                Random rnd = new Random();
-
-                foreach(Object3D obj in objects)
-                {
-                    obj.position = new Vector3((rnd.Next() % 30) - 10, 0, (rnd.Next() % 30) - 10);
-                    obj.velocity = Vector3.UnitY * -1;
-                    obj.acceleration = new Vector3(rnd.NextSingle(), rnd.NextSingle(), rnd.NextSingle());
-                }
+                Player.roll = 70;
+            }
+            if (Player.roll < -70)
+            {
+                Player.roll = -70;
             }
 
 
@@ -311,18 +354,34 @@ namespace ThreeDimensionalGame
             }
 
             // Draw 3d objects
-            foreach (Object3D obj in objects)
+            foreach (GameObject obj in objects)
             {
+
                 if (obj.GetType() == typeof(TexturedRectangle))
                 {
                     (obj as TexturedObject).Draw(Matrix.CreateTranslation(obj.position), viewMatrix, projectionMatrix);
                 }
+                else if (obj.GetType() == typeof(Line))
+                {
+                    (obj as Line).Draw(Matrix.CreateTranslation(obj.position), viewMatrix, projectionMatrix);
+                }
+                else if (obj.GetType() == typeof(ModelObject))
+                {
+                    (obj as ModelObject).Draw(Matrix.CreateTranslation(obj.position), viewMatrix, projectionMatrix);
+                }
             }
 
-            _spriteBatch.Begin();
 
-            _spriteBatch.Draw(cursorTexture, new Vector2(screenBounds.X / 2f, screenBounds.Y / 2f), null, Color.White, 0f, Vector2.Zero, 0.5f, SpriteEffects.None, 1f);
-            _spriteBatch.DrawString(font, "Test", Vector2.Zero, Color.Black);
+
+            // 2D Drawing
+            _spriteBatch.Begin();
+            
+            _spriteBatch.Draw(cursorTexture, new Vector2(screenBounds.X / 2f, screenBounds.Y / 2f), null, Color.White, 0f, new Vector2(cursorTexture.Width/2f, cursorTexture.Height/2f), 0.5f, SpriteEffects.None, 1f);
+
+
+            _spriteBatch.DrawString(font, "Yaw: " + Player.yaw.ToString(), Vector2.UnitY * 20, Color.Black);
+            _spriteBatch.DrawString(font, "Pitch: " + Player.pitch.ToString(), Vector2.Zero, Color.Black);
+            _spriteBatch.DrawString(font, "Roll: " + Player.roll.ToString(), Vector2.UnitY * 40, Color.Black);
 
             _spriteBatch.End();
 

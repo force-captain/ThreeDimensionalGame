@@ -28,10 +28,11 @@ namespace ThreeDimensionalGame
         internal static Vector3 velocity;
         internal static Vector3 acceleration;
 
-        internal static float rotationX;
 
         // Determines the angle the user is facing
-        internal static float rotationY;
+        internal static float yaw;
+        internal static float pitch;
+        internal static float roll;
 
         // Speeds up player movement.
         internal static float moveSpeedMultiplier;
@@ -39,16 +40,29 @@ namespace ThreeDimensionalGame
         // Checks if the user is in air.
         internal static bool isMidAir;
 
+        internal static Vector3 UserFacing(float distance)
+        {
+            Vector3 baseForward = Vector3.UnitX;
+            Quaternion rotation = Quaternion.CreateFromYawPitchRoll(
+                MathHelper.ToRadians(yaw),
+                MathHelper.ToRadians(pitch),
+                MathHelper.ToRadians(roll));
+            Vector3 result = Vector3.Transform(baseForward, rotation);
+            return result * distance;
+        }
+
+
+
         /// <summary>
         /// Gets a forward vector
         /// </summary>
         /// <param name="distance">The length of the vector to return</param>
-        /// <returns>A vector in the direction the user is facing</returns>
+        /// <returns>A vector forward the user is facing. Does not take into account pitch or roll</returns>
         internal static Vector3 Forward(float distance)
         {
             Vector3 baseForward = Vector3.UnitX;
-            Matrix yaw = Matrix.CreateRotationY(MathHelper.ToRadians(rotationY));
-            Vector3 result = Vector3.Transform(baseForward, yaw);
+            Matrix yawMatrix = Matrix.CreateRotationY(MathHelper.ToRadians(yaw));
+            Vector3 result = Vector3.Transform(baseForward, yawMatrix);
             return result * distance;
         }
 
@@ -60,16 +74,8 @@ namespace ThreeDimensionalGame
         internal static Vector3 Right(float distance)
         {
             Vector3 baseRight = Vector3.UnitZ;
-            Matrix yaw = Matrix.CreateRotationY(MathHelper.ToRadians(rotationY));
-            Vector3 result = Vector3.Transform(baseRight, yaw);
-            return result * distance;
-        }
-
-        internal static Vector3 Up(float distance)
-        {
-            Vector3 baseRight = Vector3.UnitY;
-            Matrix yaw = Matrix.CreateRotationY(MathHelper.ToRadians(rotationY));
-            Vector3 result = Vector3.Transform(baseRight, yaw);
+            Matrix yawMatrix = Matrix.CreateRotationY(MathHelper.ToRadians(yaw));
+            Vector3 result = Vector3.Transform(baseRight, yawMatrix);
             return result * distance;
         }
     }
